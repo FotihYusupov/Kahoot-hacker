@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kahoot Answer Finder</title>
+    <style>
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: #161b22;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px border #30363d;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        h2 { color: #58a6ff; text-align: center; }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        input {
+            flex: 1;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            outline: none;
+        }
+        button {
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background: #2ea043; }
+        .result-item {
+            background: #21262d;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 5px solid #58a6ff;
+        }
+        .question { font-weight: bold; color: #ffa657; margin-bottom: 5px; }
+        .answer { color: #7ee787; }
+        .error { color: #f85149; text-align: center; }
+        .loader { text-align: center; display: none; color: #8b949e; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>🐱 Kitty-Tools Kahoot Finder</h2>
+        <p style="text-align: center; font-size: 0.9em;">Quiz UUID kiriting (masalan: 123e4567-e89b...)</p>
+        
+        <div class="input-group">
+            <input type="text" id="quizId" placeholder="Kahoot Quiz ID (UUID)...">
+            <button onclick="fetchAnswers()">Javoblarni olish</button>
+        </div>
+
+        <div id="loader" class="loader">Qidirilmoqda... iltimos kuting...</div>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        async function fetchAnswers() {
+            const quizId = document.getElementById('quizId').value.trim();
+            const resultsDiv = document.getElementById('results');
+            const loader = document.getElementById('loader');
+            
+            if (!quizId) {
+                alert("Iltimos, ID kiriting!");
+                return;
+            }
+
+            // Tozalash
+            resultsDiv.innerHTML = "";
+            loader.style.display = "block";
+
+            // CORS Proxy ishlatish (Brauzer bloklamasligi uchun)
+            const proxyUrl = "https://corsproxy.io/?";
+            const targetUrl = `https://play.kahoot.it/rest/kahoots/${quizId}`;
+
+            try {
+                const response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
+                
+                if (!response.ok) throw new Error("Quiz topilmadi yoki u 'Private' holatda.");
+
+                const data = await response.json();
+                loader.style.display = "none";
+
+                if (!data.questions) {
+                    resultsDiv.innerHTML = "<p class='error'>Savollar topilmadi.</p>";
+                    return;
+                }
+
+                data.questions.forEach((q, index) => {
+                    if (q.type === "content") return; // Slaydlarni o'tkazib yuborish
+
+                    const questionText = q.question ? cleanHtml(q.question) : "Savol matni yo'q";
+                    
+                    // To'g'ri javoblarni yig'ish
+                    const correctChoices = q.choices
+                        .filter(c => c.correct)
+                        .map(c => cleanHtml(c.answer))
+                        .join(" | ");
+
+                    const item = document.createElement('div');
+                    item.className = 'result-item';
+                    item.innerHTML = `
+                        <div class="question">${index + 1}. ${questionText}</div>
+                        <div class="answer">✅ Javob: ${correctChoices || "Javob topilmadi"}</div>
+                    `;
+                    resultsDiv.appendChild(item);
+                });
+
+            } catch (err) {
+                loader.style.display = "none";
+                resultsDiv.innerHTML = `<p class="error">Xatolik: ${err.message}</p>`;
+            }
+        }
+
+        // HTML teglarini tozalash (Python kodidagi kabi)
+        function cleanHtml(text) {
+            if (!text) return "";
+            return text
+                .replace(/<\/?[^>]+(>|$)/g, "") // Barcha HTML teglarni o'chiradi
+                .replace(/&nbsp;/g, " ")
+                .replace(/&quot;/g, '"');
+        }
+    </script>
+</body>
+</html>
