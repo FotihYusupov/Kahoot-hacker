@@ -20,7 +20,7 @@
             background: #161b22;
             padding: 20px;
             border-radius: 10px;
-            border: 1px border #30363d;
+            border: 1px solid #30363d;
             box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
         h2 { color: #58a6ff; text-align: center; }
@@ -46,6 +46,7 @@
             border-radius: 5px;
             cursor: pointer;
             font-weight: bold;
+            transition: 0.2s;
         }
         button:hover { background: #2ea043; }
         .result-item {
@@ -57,15 +58,17 @@
         }
         .question { font-weight: bold; color: #ffa657; margin-bottom: 5px; }
         .answer { color: #7ee787; }
-        .error { color: #f85149; text-align: center; }
-        .loader { text-align: center; display: none; color: #8b949e; }
+        .error { color: #f85149; text-align: center; font-weight: bold; }
+        .loader { text-align: center; display: none; color: #8b949e; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h2>Kahoot Hacker</h2>
-        <p style="text-align: center; font-size: 0.9em;">Quiz UUID kiriting (masalan: 123e4567-e89b...)</p>
+        <h2>Kahoot Javoblarini Topuvchi</h2>
+        <p style="text-align: center; font-size: 0.9em; color: #8b949e;">
+            Quiz UUID kiriting (masalan: 123e4567-e89b-12d3-a456-426614174000)
+        </p>
         
         <div class="input-group">
             <input type="text" id="quizId" placeholder="Kahoot Quiz ID (UUID)...">
@@ -91,56 +94,70 @@
             resultsDiv.innerHTML = "";
             loader.style.display = "block";
 
-            // CORS Proxy ishlatish (Brauzer bloklamasligi uchun)
-            const proxyUrl = "https://corsproxy.io/?";
+            // AllOrigins Proxy ishlatish (CORS xatoligini oldini olish uchun)
             const targetUrl = `https://play.kahoot.it/rest/kahoots/${quizId}`;
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
 
             try {
-                const response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
+                const response = await fetch(proxyUrl);
                 
-                if (!response.ok) throw new Error("Quiz topilmadi yoki u 'Private' holatda.");
+                if (!response.ok) throw new Error("Proxy server bilan bog'lanib bo'lmadi.");
 
-                const data = await response.json();
+                const result = await response.json();
+                
+                // AllOrigins 'contents' ichida ma'lumotni qaytaradi
+                if (!result.contents) {
+                    throw new Error("Ma'lumot topilmadi.");
+                }
+
+                const data = JSON.parse(result.contents);
                 loader.style.display = "none";
 
-                if (!data.questions) {
-                    resultsDiv.innerHTML = "<p class='error'>Savollar topilmadi.</p>";
+                if (!data.questions || data.questions.length === 0) {
+                    resultsDiv.innerHTML = "<p class='error'>Savollar topilmadi. Quiz 'Private' bo'lishi mumkin.</p>";
                     return;
                 }
 
                 data.questions.forEach((q, index) => {
-                    if (q.type === "content") return; // Slaydlarni o'tkazib yuborish
+                    // Faqat savollarni olish (slaydlarni o'tkazib yuborish)
+                    if (q.type === "content") return;
 
-                    const questionText = q.question ? cleanHtml(q.question) : "Savol matni yo'q";
+                    const questionText = q.question ? cleanHtml(q.question) : "Savol matni mavjud emas";
                     
-                    // To'g'ri javoblarni yig'ish
+                    // To'g'ri javoblarni yig'ish (Quiz, True/False va Multiple Choice uchun)
                     const correctChoices = q.choices
-                        .filter(c => c.correct)
-                        .map(c => cleanHtml(c.answer))
-                        .join(" | ");
+                        ? q.choices
+                            .filter(c => c.correct)
+                            .map(c => cleanHtml(c.answer))
+                            .join(" | ")
+                        : "";
 
                     const item = document.createElement('div');
                     item.className = 'result-item';
                     item.innerHTML = `
                         <div class="question">${index + 1}. ${questionText}</div>
-                        <div class="answer">✅ Javob: ${correctChoices || "Javob topilmadi"}</div>
+                        <div class="answer">✅ Javob: ${correctChoices || "Javob topilmadi (balki u ochiq savoldir)"}</div>
                     `;
                     resultsDiv.appendChild(item);
                 });
 
             } catch (err) {
                 loader.style.display = "none";
-                resultsDiv.innerHTML = `<p class="error">Xatolik: ${err.message}</p>`;
+                resultsDiv.innerHTML = `<p class="error">Xatolik: Quiz ID noto'g'ri yoki u yopiq (Private).</p>`;
+                console.error("Detail error:", err);
             }
         }
 
-        // HTML teglarini tozalash (Python kodidagi kabi)
+        // HTML teglarini tozalash funksiyasi
         function cleanHtml(text) {
             if (!text) return "";
             return text
-                .replace(/<\/?[^>]+(>|$)/g, "") // Barcha HTML teglarni o'chiradi
+                .replace(/<\/?[^>]+(>|$)/g, "") // HTML teglarini o'chirish
                 .replace(/&nbsp;/g, " ")
-                .replace(/&quot;/g, '"');
+                .replace(/&quot;/g, '"')
+                .replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>');
         }
     </script>
 </body>
